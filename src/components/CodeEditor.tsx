@@ -72,14 +72,15 @@ export function CodeEditor({
     }
   };
 
-  // Support Tab key (indent 2 spaces instead of losing focus)
+  // Enhanced keyboard handlers: Tab indent, Smart Quotes (""), backspace pairs
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    // 1. Tab key: indent 2 spaces
     if (e.key === 'Tab') {
       e.preventDefault();
-      const textarea = e.currentTarget;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-
       const updated = currentCode.substring(0, start) + '  ' + currentCode.substring(end);
 
       if (activeTab === 'html') {
@@ -92,6 +93,96 @@ export function CodeEditor({
         textarea.selectionStart = textarea.selectionEnd = start + 2;
         if (onCursorChange) onCursorChange(start + 2);
       }, 0);
+      return;
+    }
+
+    // 2. Virgolette e apici (" e ')
+    if (e.key === '"' || e.key === "'") {
+      const quote = e.key;
+
+      // Se c'è testo selezionato: racchiudilo tra virgolette anziché cancellarlo!
+      if (start !== end) {
+        e.preventDefault();
+        const selected = currentCode.substring(start, end);
+        const updated = currentCode.substring(0, start) + quote + selected + quote + currentCode.substring(end);
+        if (activeTab === 'html') onHtmlChange(updated);
+        else onCssChange(updated);
+
+        setTimeout(() => {
+          textarea.selectionStart = start + 1;
+          textarea.selectionEnd = end + 1;
+          if (onCursorChange) onCursorChange(end + 1);
+        }, 0);
+        return;
+      }
+
+      // Se il cursore è subito prima di una virgoletta identica già presente, oltrepassala (step over)
+      const nextChar = currentCode.charAt(start);
+      if (nextChar === quote) {
+        e.preventDefault();
+        textarea.selectionStart = textarea.selectionEnd = start + 1;
+        if (onCursorChange) onCursorChange(start + 1);
+        return;
+      }
+
+      // Se stiamo inserendo una virgoletta: inserisci la coppia aperta/chiusa "" e posiziona il cursore al centro!
+      // Si attiva quando il carattere successivo è uno spazio, >, /, ;, virgola, a capo o fine riga
+      if (!nextChar || /[\s>/;,)=\]]/.test(nextChar)) {
+        e.preventDefault();
+        const updated = currentCode.substring(0, start) + quote + quote + currentCode.substring(end);
+        if (activeTab === 'html') onHtmlChange(updated);
+        else onCssChange(updated);
+
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + 1;
+          if (onCursorChange) onCursorChange(start + 1);
+        }, 0);
+        return;
+      }
+    }
+
+    // 3. Parentesi graffe e tonde automatiche
+    if (e.key === '(' || e.key === '{' || e.key === '[') {
+      const pairs: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
+      const closeChar = pairs[e.key];
+
+      if (start !== end) {
+        e.preventDefault();
+        const selected = currentCode.substring(start, end);
+        const updated = currentCode.substring(0, start) + e.key + selected + closeChar + currentCode.substring(end);
+        if (activeTab === 'html') onHtmlChange(updated);
+        else onCssChange(updated);
+        setTimeout(() => {
+          textarea.selectionStart = start + 1;
+          textarea.selectionEnd = end + 1;
+          if (onCursorChange) onCursorChange(end + 1);
+        }, 0);
+        return;
+      }
+    }
+
+    // 4. Backspace intelligente: se il cursore è tra due virgolette vuote "" o '', eliminale entrambe
+    if (e.key === 'Backspace' && start === end && start > 0) {
+      const prevChar = currentCode.charAt(start - 1);
+      const nextChar = currentCode.charAt(start);
+      if (
+        (prevChar === '"' && nextChar === '"') ||
+        (prevChar === "'" && nextChar === "'") ||
+        (prevChar === '{' && nextChar === '}') ||
+        (prevChar === '(' && nextChar === ')') ||
+        (prevChar === '[' && nextChar === ']')
+      ) {
+        e.preventDefault();
+        const updated = currentCode.substring(0, start - 1) + currentCode.substring(start + 1);
+        if (activeTab === 'html') onHtmlChange(updated);
+        else onCssChange(updated);
+
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start - 1;
+          if (onCursorChange) onCursorChange(start - 1);
+        }, 0);
+        return;
+      }
     }
   };
 
@@ -125,9 +216,9 @@ export function CodeEditor({
   const fsConfig = getFontSizeClasses();
 
   return (
-    <div className="flex flex-col h-full bg-[#181825] border-r border-[#313244] overflow-hidden select-none">
+    <div className="flex flex-col h-full bg-[#181825] border-r border-[#313244] overflow-hidden">
       {/* Editor Tab Bar & Controls */}
-      <div className="h-11 bg-[#1e1e2e] border-b border-[#313244] flex items-center justify-between px-3 shrink-0">
+      <div className="h-11 bg-[#1e1e2e] border-b border-[#313244] flex items-center justify-between px-3 shrink-0 select-none">
         <div className="flex items-center gap-2">
           <button
             onClick={() => onTabChange('html')}
@@ -235,8 +326,11 @@ export function CodeEditor({
             dangerouslySetInnerHTML={{ __html: highlightedCode + '\n ' }}
             className={`absolute inset-0 p-4 m-0 pointer-events-none whitespace-pre overflow-hidden font-mono ${fsConfig.font} text-[#cdd6f4]`}
             style={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               tabSize: 2,
               letterSpacing: 'normal',
+              lineHeight: fsConfig.lineHeight,
+              boxSizing: 'border-box',
             }}
           />
 
@@ -263,10 +357,13 @@ export function CodeEditor({
                 ? "<!-- Incolla o inserisci snippet bento per comporre la tua pagina... -->"
                 : "/* Inserisci qui le tue classi o regole CSS personalizzate (Tailwind è già attivo) */"
             }
-            className={`absolute inset-0 w-full h-full p-4 m-0 resize-none font-mono ${fsConfig.font} bg-transparent text-transparent caret-[#89b4fa] selection:bg-[#45475a]/70 selection:text-transparent focus:outline-none focus:ring-0 overflow-auto whitespace-pre`}
+            className={`absolute inset-0 w-full h-full p-4 m-0 resize-none font-mono ${fsConfig.font} bg-transparent text-transparent caret-[#89b4fa] selection:bg-[#3b82f6]/45 selection:text-white focus:outline-none focus:ring-0 overflow-auto whitespace-pre border-0 outline-none`}
             style={{
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
               tabSize: 2,
               letterSpacing: 'normal',
+              lineHeight: fsConfig.lineHeight,
+              boxSizing: 'border-box',
             }}
           />
         </div>

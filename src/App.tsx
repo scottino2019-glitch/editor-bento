@@ -281,7 +281,19 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If user is actively typing inside an input or textarea, let the textarea perform native undo/redo!
+      const target = e.target as HTMLElement | null;
+      const isEditingText = target && (
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'INPUT' ||
+        target.isContentEditable
+      );
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (isEditingText) {
+          // Allow native granular undo inside the textarea!
+          return;
+        }
         if (e.shiftKey) {
           e.preventDefault();
           handleRedo();
@@ -290,6 +302,9 @@ export default function App() {
           handleUndo();
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        if (isEditingText) {
+          return;
+        }
         e.preventDefault();
         handleRedo();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {

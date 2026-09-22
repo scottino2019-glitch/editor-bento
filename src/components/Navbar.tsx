@@ -63,7 +63,23 @@ export function Navbar({
   snippetCount,
 }: NavbarProps) {
   const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const templateMenuRef = useRef<HTMLDivElement>(null);
+  const confirmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleClearClick = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+      confirmTimeoutRef.current = setTimeout(() => {
+        setConfirmClear(false);
+      }, 3500);
+    } else {
+      if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+      setConfirmClear(false);
+      onClear();
+    }
+  };
 
   // Close template menu when clicking outside
   useEffect(() => {
@@ -170,14 +186,18 @@ export function Navbar({
           <span className="hidden lg:inline">Aggiorna</span>
         </button>
 
-        {/* Elimina / Cancella Tutto */}
+        {/* Elimina / Cancella Tutto con conferma di sicurezza */}
         <button
-          onClick={onClear}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#181825] hover:bg-[#45202a] border border-[#313244] hover:border-[#f38ba8]/50 text-xs font-mono text-[#a6adc8] hover:text-[#f38ba8] transition"
-          title="Elimina tutto il codice e riparti da zero"
+          onClick={handleClearClick}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono transition ${
+            confirmClear
+              ? 'bg-[#45202a] border-[#f38ba8] text-[#f38ba8] animate-pulse font-semibold'
+              : 'bg-[#181825] hover:bg-[#45202a] border-[#313244] hover:border-[#f38ba8]/50 text-[#a6adc8] hover:text-[#f38ba8]'
+          }`}
+          title={confirmClear ? "Clicca di nuovo per confermare l'eliminazione" : "Elimina tutto il codice e riparti da zero"}
         >
           <Trash2 className="w-3.5 h-3.5 text-[#f38ba8]" />
-          <span className="hidden lg:inline">Elimina</span>
+          <span>{confirmClear ? 'Confermi?' : 'Elimina'}</span>
         </button>
 
         {/* Formatta Codice */}

@@ -12,9 +12,8 @@
 export function highlightHtml(code: string): string {
   if (!code) return '';
 
-  // Escape basic HTML entities to avoid unrendered tags
-  // We will tokenize HTML syntax with regex
-  const htmlRegex = /(<!--[\s\S]*?-->)|(<\/?[a-zA-Z0-9:-]+)|(\s+[a-zA-Z0-9_:-]+(?==))|(=(?:'[^']*'|"[^"]*"))|([>|\/?>])|([^<]+)/g;
+  // Tokenize HTML with full support for unclosed and closed quotes, attributes, and tags
+  const htmlRegex = /(<!--[\s\S]*?-->)|(<\/?[a-zA-Z0-9:-]+)|(\s+[a-zA-Z0-9_:-]+(?==|\s|>|\/))|(=(?:'[^']*'?|"[^"]*"?|[^\s>]+))|([>|\/?>])|([^<]+)/g;
 
   return code.replace(htmlRegex, (match, comment, tag, attrName, attrVal, tagEnd, text) => {
     if (comment) {
@@ -30,14 +29,20 @@ export function highlightHtml(code: string): string {
       return `<span style="color: #fab387;">${escapeHtml(attrName)}</span>`;
     }
     if (attrVal) {
-      // Attribute value like ="..."
-      // Check if it's class="..." to give Tailwind classes vivid styling
-      const isClassAttr = match.includes('class=') || match.includes('className=');
-      const valContent = attrVal.slice(1); // include equals
-      const quoteChar = valContent.charAt(1);
-      const innerVal = valContent.slice(2, -1);
+      // Attribute value starting with '='
+      const rest = attrVal.slice(1);
+      const quote = rest.charAt(0);
 
-      return `<span style="color: #cdd6f4;">=</span><span style="color: #a6e3a1;">${escapeHtml(quoteChar)}</span><span style="color: ${isClassAttr ? '#a6e3a1' : '#a6e3a1'};">${escapeHtml(innerVal)}</span><span style="color: #a6e3a1;">${escapeHtml(quoteChar)}</span>`;
+      if (quote === '"' || quote === "'") {
+        const hasClosingQuote = rest.length > 1 && rest.endsWith(quote);
+        const valueInside = hasClosingQuote ? rest.slice(1, -1) : rest.slice(1);
+        const closingQuote = hasClosingQuote ? quote : '';
+
+        return `<span style="color: #cdd6f4;">=</span><span style="color: #a6e3a1;">${escapeHtml(quote)}</span><span style="color: #a6e3a1;">${escapeHtml(valueInside)}</span>${closingQuote ? `<span style="color: #a6e3a1;">${escapeHtml(closingQuote)}</span>` : ''}`;
+      }
+
+      // Unquoted attribute value
+      return `<span style="color: #cdd6f4;">=</span><span style="color: #a6e3a1;">${escapeHtml(rest)}</span>`;
     }
     if (tagEnd) {
       return `<span style="color: #89b4fa;">${escapeHtml(tagEnd)}</span>`;
@@ -52,11 +57,14 @@ export function highlightHtml(code: string): string {
 export function highlightCss(code: string): string {
   if (!code) return '';
 
-  const cssRegex = /(\/\*[\s\S]*?\*\/)|([.#][a-zA-Z0-9_-]+)|([a-zA-Z-]+(?=\s*:))|(:)|([^{};]+(?=;|\}))|([{};])/g;
+  const cssRegex = /(\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|([.#][a-zA-Z0-9_-]+)|([a-zA-Z-]+(?=\s*:))|(:)|([^{};]+(?=;|\}))|([{};])/g;
 
-  return code.replace(cssRegex, (match, comment, selector, property, colon, value, brace) => {
+  return code.replace(cssRegex, (match, comment, str, selector, property, colon, value, brace) => {
     if (comment) {
       return `<span style="color: #6c7086; font-style: italic;">${escapeHtml(comment)}</span>`;
+    }
+    if (str) {
+      return `<span style="color: #a6e3a1;">${escapeHtml(str)}</span>`;
     }
     if (selector) {
       return `<span style="color: #fab387; font-weight: 600;">${escapeHtml(selector)}</span>`;
@@ -78,10 +86,9 @@ export function highlightCss(code: string): string {
 }
 
 function escapeHtml(str: string): string {
+  if (!str) return '';
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/>/g, '&gt;');
 }
