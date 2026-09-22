@@ -1,0 +1,6 @@
+{
+  "name": "Bento Studio - HTML & Tailwind Builder",
+  "description": "Editor live HTML e CSS con motore Tailwind e libreria di snippet modulari in stile bento per comporre layout su misura a partire da un modello vuoto.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
